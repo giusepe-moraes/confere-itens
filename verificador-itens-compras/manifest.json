@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Verificador de Itens - Compras.gov",
+  "version": "0.1",
+  "minimum_chrome_version": "111",
+  "description": "Confere os itens exibidos na página de resumo da contratação do Compras.gov com a planilha. Só observa o site; não faz requisições.",
+  "content_scripts": [
+    {
+      "matches": ["https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-artefatos-web/*"],
+      "js": ["interceptor.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-artefatos-web/*"],
+      "js": ["verificacao.js", "painel.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
