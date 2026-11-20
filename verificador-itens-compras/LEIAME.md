@@ -79,6 +79,7 @@ A planilha fica só na memória da aba; nada é gravado. Ao trocar de contrataç
 - `interceptor.js`: observa as respostas (só GET) da lista de itens, da lista de grupos e dos itens de cada grupo, com o total de cada lista (contexto da página).
 - `verificacao.js`: colunas, leitura da colagem e conferência (também roda no Node, via `require`).
 - `painel.js`: painel e grade.
+- `LICENSE`: licença MIT.
 
 ## Testes
 
@@ -92,3 +93,7 @@ node --test testes/*.test.js               # também o painel, no Chromium (requ
 ## Requisitos
 
 Chrome 111 ou mais novo.
+
+## Licença
+
+Software livre sob a licença MIT (arquivo `LICENSE`): qualquer pessoa ou órgão pode usar, copiar, modificar e redistribuir, inclusive em versões adaptadas, desde que mantenha o aviso de copyright e a licença. É fornecido sem garantia.
