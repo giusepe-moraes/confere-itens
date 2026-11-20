@@ -11,7 +11,7 @@
 
   const V = globalThis.VerificadorItens;
   const COLS = V.COLUNAS;
-  const LARGURA = { item: 52, catmat: 92, quantidade: 72, valor: 98, beneficio: 132, qtdMinima: 88, criterio: 118, intervalo: 86, sigiloso: 82 };
+  const LARGURA = { item: 52, catmat: 92, quantidade: 72, valor: 98, beneficio: 126, qtdMinima: 90, criterio: 118, intervalo: 90, sigiloso: 82 };
 
   const estado = {
     id: null, // contratação da página
