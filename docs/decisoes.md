@@ -19,7 +19,7 @@ Consequência: a conferência depende do que o site exibe — o usuário precisa
 Porquê: a mesma URL com POST/PUT (inclusão de item) não devolve a lista exibida.
 Consequência: `ehLista()` no interceptor; teste dedicado.
 
-**D-04 — O interceptor engole todo erro e não lê cabeçalhos.**
+**D-04 — O interceptor engole todo erro e não lê cabeçalhos.** *(A parte "não lê cabeçalhos" foi substituída por D-15.)*
 Porquê: roda no mundo da página; qualquer exceção ou efeito colateral poderia quebrar o site.
 Consequência: falha de leitura é silenciosa — o sintoma é o painel em "Aguardando…". O total de respostas em array (possivelmente só no cabeçalho) fica desconhecido: ver Q1 na spec.
 
@@ -62,6 +62,10 @@ Consequência: até 1 s de atraso para aparecer/sumir; cada mensagem do intercep
 **D-14 — Coluna desativada é a única exceção a D-01.**
 Porquê: há contratações em que uma coluna legitimamente não se aplica ou a planilha não a traz; sem isso o verde seria inalcançável. É uma escolha explícita do usuário, não uma omissão.
 Consequência: sempre registrada no painel e no relatório; reativada ao limpar ou trocar de contratação.
+
+**D-15 — O interceptor lê o cabeçalho `register-count`; sem total, a conferência fica incompleta.** (2026-11-19, v0.2)
+Porquê: as respostas reais (`testes/dados-reais/`) mostraram que o site manda todas as listas como array com status 206 e o total só nos cabeçalhos de paginação (Q1). Sem lê-lo, uma planilha com os 10 itens exibidos de uma contratação de 148 saía verde. Ler um cabeçalho da resposta que o site já recebeu não faz requisição nem altera nada; o resto de D-04 continua.
+Consequência: só `register-count` é lido, só quando o corpo é array, dentro do `try/catch`. Pelo P0, total não informado (cabeçalho sumiu, lista não chegou) deixa a conferência incompleta em vez de supor que tudo foi exibido — se o site mudar o cabeçalho, o sintoma é amarelo sempre, nunca verde falso. Pelo mesmo motivo a lista de grupos, também paginada, tem total: faltar grupo nela deixa incompleta.
 
 ---
 

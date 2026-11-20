@@ -4,22 +4,26 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const V = require(path.join(process.env.EXT || path.join(__dirname, '..', 'verificador-itens-compras'), 'verificacao.js'));
+const reais = require('./apoio-dados-reais.js');
 
 const IDX = Object.fromEntries(V.COLUNAS.map((c, i) => [c.id, i]));
 
-/** Item da API com valores típicos; `extra` sobrescreve. */
+/** Item da API com valores típicos, nos campos e tipos do site real (testes/dados-reais); `extra` sobrescreve. */
 function item(n, extra = {}) {
   return {
     numeroItem: n,
     nomeItem: `Produto ${n}`,
-    codigoItem: 400000 + n,
+    codigoItem: String(400000 + n),
     quantidadeItens: 100,
     quantidadeMinimaAquisicao: 100,
     valorUnitario: 8.9962,
     valorSigiloso: false,
     intervaloMinimo: 0.5,
-    tipoBeneficio: { id: 0, nome: 'Sem benefício', desempateFicto: false, cotaReservada: false, subContratacao: false },
-    criterioJulgamento: { nome: 'Menor Preço', maiorDesconto: false },
+    tipoBeneficio: { id: 0, nome: 'Sem benefícios ME/EPP', subContratacao: false, cotaReservada: false, desempateFicto: false },
+    idCriterioJulgamento: 1,
+    nomeCriterioJulgamento: 'Menor preço',
+    criterioJulgamento: { id: 1, nome: 'Menor preço', menorPrecoMaiorDesconto: false, maiorDesconto: false, aplicavel: true },
+    idGrupo: null,
     ...extra,
   };
 }
@@ -47,16 +51,21 @@ test('ordem das colunas: QUANTIDADE MÍNIMA logo depois de QUANTIDADE', () => {
     'CRITÉRIO DE JULGAMENTO', 'INTERVALO MÍNIMO', 'VALOR SIGILOSO',
   ]);
   const a = analisar([linhaCheia(1)], [item(1)], semPadroes());
-  const desat = V.analisar([linhaCheia(1)], V.juntarSite({ item: { itens: [item(1)] } }, null), semPadroes(),
+  const desat = V.analisar([linhaCheia(1)], semGrupos([item(1)]), semPadroes(),
     new Set(['sigiloso', 'valor', 'qtdMinima', 'quantidade']));
   assert.deepEqual(desat.colunasDesativadas, ['Quantidade', 'Quantidade mínima', 'Valor unitário', 'Valor sigiloso']);
   assert.match(V.relatorio(desat, '1'), /Colunas desativadas \(não verificadas\): Quantidade, Quantidade mínima, Valor unitário, Valor sigiloso/);
   assert.equal(a.completa, true);
 });
 
-/** Atalho: analisa com a lista de itens fora de grupo (e o total informado, se houver). */
-const analisar = (grade, itens, padroes, total) =>
-  V.analisar(grade, itens && V.juntarSite({ item: { itens, total } }, null), padroes);
+/**
+ * O que o painel recebe de uma contratação sem grupos no site real: a lista de itens com o total (cabeçalho
+ * register-count; por padrão, todos exibidos) e a lista de grupos vazia, com total 0.
+ */
+const semGrupos = (itens, total = itens.length) => V.juntarSite({ item: { itens, total } }, [], 0);
+
+/** Atalho: analisa com a lista de itens fora de grupo (e o total informado; por padrão, todos exibidos). */
+const analisar = (grade, itens, padroes, total) => V.analisar(grade, itens && semGrupos(itens, total), padroes);
 
 // ---------- números e texto ----------
 
@@ -325,9 +334,34 @@ test('incompleta: total informado pelo site maior que o exibido', () => {
   const r = V.relatorio(a, '7');
   assert.match(r, /Itens exibidos pelo site: 2 de 148/);
   assert.match(r, /O site exibiu só 2 de 148 itens/);
-  // total igual (ou ausente) não atrapalha
+  // total igual não atrapalha (total ausente: ver o teste seguinte)
   assert.equal(analisar(g, [item(1), item(2)], semPadroes(), 2).completa, true);
-  assert.equal(analisar(g, [item(1), item(2)], semPadroes(), undefined).total, null);
+});
+
+test('incompleta: o site não informou o total (Q1: no site real, o total só vem no cabeçalho register-count)', () => {
+  const g = [linhaCheia(1), linhaCheia(2)];
+  // lista de itens sem total: os 2 itens exibidos podem ser 2 de 148
+  const a = V.analisar(g, V.juntarSite({ item: { itens: [item(1), item(2)] } }, [], 0), semPadroes());
+  assert.deepEqual(a.conferem, [1, 2]);
+  assert.equal(a.total, null);
+  assert.deepEqual(a.totaisNaoInformados, ['itens fora de grupo']);
+  assert.equal(a.completa, false);
+  const r = V.relatorio(a, '7');
+  assert.match(r, /Sem divergência no que foi conferido: 2 \| Divergem: 0/);
+  assert.match(r, /ATENÇÃO: CONFERÊNCIA INCOMPLETA\n {3}- O site não informou o total de itens fora de grupo \(não dá para saber se todos os itens estão exibidos\)/);
+  // lista de grupos não recebida (ou sem total): pode haver grupos que o painel não conhece
+  const b = V.analisar(g, V.juntarSite({ item: { itens: [item(1), item(2)], total: 2 } }, []), semPadroes());
+  assert.deepEqual(b.totaisNaoInformados, ['grupos']);
+  assert.equal(b.completa, false);
+  assert.match(V.relatorio(b, '7'), /- O site não informou o total de grupos/);
+  // nada recebido, ou site montado sem passar por juntarSite: nada se supõe
+  assert.deepEqual(V.analisar(g, null, semPadroes()).totaisNaoInformados, ['itens fora de grupo', 'grupos']);
+  assert.equal(V.analisar(g, { itens: [item(1), item(2)], grupos: [] }, semPadroes()).completa, false);
+  assert.match(V.relatorio(V.analisar(g, null, semPadroes()), '7'), /o total de itens fora de grupo e de grupos/);
+  // total 0 é um total informado (contratação só com grupos)
+  assert.deepEqual(V.juntarSite({ item: { itens: [], total: 0 } }, [], 0).totaisNaoInformados, []);
+  // com os dois totais: completa
+  assert.equal(V.analisar(g, semGrupos([item(1), item(2)]), semPadroes()).completa, true);
 });
 
 test('relatório lista as divergências por item', () => {
@@ -353,21 +387,27 @@ const g1 = [1, 2, 3].map((n) => item(n, { idGrupo: 57339 }));
 const g2 = [4, 5].map((n) => item(n, { idGrupo: 57341 }));
 
 test('juntarSite: junta os grupos expandidos e soma o total dos grupos', () => {
-  const s = V.juntarSite({ item: { itens: [] }, 'grupo/57339': { itens: g1 } }, GRUPOS);
+  // como no site real (contratação 578602): lista de itens fora de grupo vazia, com register-count 0
+  const s = V.juntarSite({ item: { itens: [], total: 0 }, 'grupo/57339': { itens: g1 } }, GRUPOS, 2);
   assert.deepEqual(s.itens.map((i) => i.numeroItem), [1, 2, 3]);
   assert.equal(s.total, 5);
   assert.deepEqual(s.grupos, [{ nome: 'GRUPO 1', exibidos: 3, total: 3 }, { nome: 'GRUPO 2', exibidos: 0, total: 2 }]);
-  // itens fora de grupo somam ao total (pelo total informado ou, sem ele, pela quantidade recebida)
-  assert.equal(V.juntarSite({ item: { itens: [item(9)] } }, GRUPOS).total, 6);
-  assert.equal(V.juntarSite({ item: { itens: [item(9)], total: 4 } }, GRUPOS).total, 9);
+  assert.deepEqual(s.totaisNaoInformados, []);
+  assert.equal(s.gruposNaoListados, null);
+  // itens fora de grupo somam ao total informado
+  assert.equal(V.juntarSite({ item: { itens: [item(9)], total: 4 } }, GRUPOS, 2).total, 9);
+  // sem o total dos itens fora de grupo, o total fica desconhecido: não se supõe que todos foram exibidos
+  const semTotal = V.juntarSite({ item: { itens: [item(9)] } }, GRUPOS, 2);
+  assert.equal(semTotal.total, undefined);
+  assert.deepEqual(semTotal.totaisNaoInformados, ['itens fora de grupo']);
   // sem grupos: só o total da lista de itens
-  assert.equal(V.juntarSite({ item: { itens: [item(9)] } }, null).total, undefined);
-  assert.equal(V.juntarSite({}, [{ id: 1, sequencialGrupo: 3, quantidadeItens: '4' }]).grupos[0].nome, 'Grupo 3');
+  assert.equal(V.juntarSite({ item: { itens: [item(9)], total: 1 } }, [], 0).total, 1);
+  assert.equal(V.juntarSite({}, [{ id: 1, sequencialGrupo: 3, quantidadeItens: '4' }], 1).grupos[0].nome, 'Grupo 3');
 });
 
 test('grupos: incompleta enquanto houver grupo não expandido', () => {
   const grade = [1, 2, 3, 4, 5].map((n) => linhaCheia(n));
-  const parcial = V.analisar(grade, V.juntarSite({ item: { itens: [] }, 'grupo/57339': { itens: g1 } }, GRUPOS), semPadroes());
+  const parcial = V.analisar(grade, V.juntarSite({ item: { itens: [], total: 0 }, 'grupo/57339': { itens: g1 } }, GRUPOS, 2), semPadroes());
   assert.equal(parcial.completa, false);
   assert.equal(parcial.total, 5);
   assert.equal(parcial.temGrupos, true);
@@ -378,7 +418,7 @@ test('grupos: incompleta enquanto houver grupo não expandido', () => {
   assert.match(r, /Itens exibidos pelo site: 3 de 5/);
   assert.match(r, /Grupos não exibidos por completo: GRUPO 2 \(0 de 2\)/);
 
-  const tudo = V.analisar(grade, V.juntarSite({ item: { itens: [] }, 'grupo/57339': { itens: g1 }, 'grupo/57341': { itens: g2 } }, GRUPOS), semPadroes());
+  const tudo = V.analisar(grade, V.juntarSite({ item: { itens: [], total: 0 }, 'grupo/57339': { itens: g1 }, 'grupo/57341': { itens: g2 } }, GRUPOS, 2), semPadroes());
   assert.equal(tudo.completa, true);
   assert.deepEqual(tudo.conferem, [1, 2, 3, 4, 5]);
   assert.deepEqual(tudo.gruposIncompletos, []);
@@ -387,7 +427,7 @@ test('grupos: incompleta enquanto houver grupo não expandido', () => {
 
 test('grupos: divergência num item de grupo', () => {
   const grade = [1, 2, 3].map((n) => linhaCheia(n, n === 2 ? { quantidade: '7' } : {}));
-  const a = V.analisar(grade, V.juntarSite({ 'grupo/57339': { itens: g1 } }, GRUPOS.slice(0, 1)), semPadroes());
+  const a = V.analisar(grade, V.juntarSite({ item: { itens: [], total: 0 }, 'grupo/57339': { itens: g1 } }, GRUPOS.slice(0, 1), 1), semPadroes());
   assert.equal(a.completa, true, 'tudo exibido e conferido (com divergência)');
   assert.match(V.relatorio(a, '1'), /Item 2 .*\n {3}- Quantidade: site 100, planilha 7/);
   assert.deepEqual(a.divergem.map((l) => l.item), [2]);
@@ -402,7 +442,7 @@ test('coluna desativada: ignora divergências, valores não reconhecidos e o pad
   assert.equal(ativa.divergem.length, 1);
   assert.equal(ativa.completa, false);
 
-  const a = V.analisar(grade, V.juntarSite({ item: { itens: [item(1), item(2)] } }, null), p, new Set(['valor', 'sigiloso', 'qtdMinima']));
+  const a = V.analisar(grade, semGrupos([item(1), item(2)]), p, new Set(['valor', 'sigiloso', 'qtdMinima']));
   assert.equal(a.completa, true);
   assert.deepEqual(a.conferem, [1, 2]);
   assert.deepEqual(a.divergem, []);
@@ -421,7 +461,7 @@ test('coluna desativada: ignora divergências, valores não reconhecidos e o pad
 });
 
 test('coluna desativada não substitui as outras regras de incompleta', () => {
-  const site = V.juntarSite({ item: { itens: [item(1)] } }, null);
+  const site = semGrupos([item(1)]);
   // coluna vazia continua não conferida; desativar outra não resolve
   const a = V.analisar([linhaCheia(1, { catmat: '' })], site, semPadroes(), new Set(['valor']));
   assert.equal(a.completa, false);
@@ -509,7 +549,7 @@ test('numeroBR: só aceita número de planilha (nada de notação científica, h
 test('grupos: grupo não exibido por completo nunca dá conferência completa, mesmo com o total subestimado', () => {
   const grupos = [{ id: 1, nomeGrupo: 'G1', quantidadeItens: 2 }, { id: 2, nomeGrupo: 'G2', quantidadeItens: 2 }];
   // chegou a lista de um grupo que não está na lista de grupos: os itens exibidos igualam o total somado
-  const s = V.juntarSite({ 'grupo/1': { itens: [item(1), item(2)] }, 'grupo/9': { itens: [item(3), item(4)] } }, grupos);
+  const s = V.juntarSite({ item: { itens: [], total: 0 }, 'grupo/1': { itens: [item(1), item(2)] }, 'grupo/9': { itens: [item(3), item(4)] } }, grupos, 2);
   const a = V.analisar([1, 2, 3, 4].map((n) => linhaCheia(n)), s, semPadroes());
   assert.deepEqual(a.gruposIncompletos.map((g) => g.nome), ['G2']);
   assert.equal(a.completa, false);
@@ -520,3 +560,73 @@ test('relatório: item do site sem código não vira "CATMAT undefined"', () => 
   const a = analisar([linhaCheia(1, { valor: '9', catmat: '' })], [item(1, { codigoItem: undefined, nomeItem: undefined })], semPadroes());
   assert.match(V.relatorio(a, '1'), /^Item 1 \(CATMAT —\):$/m);
 });
+
+test('grupos: lista de grupos paginada — faltar grupo na lista deixa incompleta, mesmo com os listados completos', () => {
+  const grade = [1, 2, 3, 4, 5].map((n) => linhaCheia(n));
+  const listas = { item: { itens: [], total: 0 }, 'grupo/57339': { itens: g1 }, 'grupo/57341': { itens: g2 } };
+  // o site listou 2 de 3 grupos (register-count 3): o total somado (5) não conta o grupo que falta
+  const s = V.juntarSite(listas, GRUPOS, 3);
+  assert.deepEqual(s.gruposNaoListados, { recebidos: 2, total: 3 });
+  const a = V.analisar(grade, s, semPadroes());
+  assert.deepEqual(a.conferem, [1, 2, 3, 4, 5]);
+  assert.equal(a.total, null, 'os itens exibidos igualam o total somado');
+  assert.deepEqual(a.gruposIncompletos, []);
+  assert.deepEqual(a.gruposNaoListados, { recebidos: 2, total: 3 });
+  assert.equal(a.temGrupos, true);
+  assert.equal(a.completa, false);
+  assert.match(V.relatorio(a, '1'), /ATENÇÃO: CONFERÊNCIA INCOMPLETA\n {3}- O site listou só 2 de 3 grupos/);
+  // nenhum grupo recebido, mas o total diz que há grupos
+  const nenhum = V.analisar([linhaCheia(1)], V.juntarSite({ item: { itens: [item(1)], total: 1 } }, [], 2), semPadroes());
+  assert.equal(nenhum.temGrupos, true);
+  assert.equal(nenhum.completa, false);
+  // todos listados (os grupos acumulam entre as páginas da lista): completa
+  assert.equal(V.analisar(grade, V.juntarSite(listas, GRUPOS, 2), semPadroes()).completa, true);
+});
+
+// ---------- dados reais (testes/dados-reais, fora do git; pulados sem a pasta) ----------
+
+/** Junta as respostas gravadas como o painel faz com as mensagens do interceptor (total = register-count). */
+function siteReal(respostas) {
+  const listas = {};
+  const grupos = new Map();
+  let totalGrupos;
+  for (const r of respostas) {
+    const total = r.registros === undefined ? undefined : Number(r.registros);
+    if (r.lista === 'grupos') {
+      for (const g of r.corpo) grupos.set(g.id, g);
+      totalGrupos = total;
+    } else listas[r.lista] = { itens: r.corpo, total };
+  }
+  return V.juntarSite(listas, [...grupos.values()], totalGrupos);
+}
+
+const EXEMPLOS = reais.exemplos();
+if (!EXEMPLOS.length) test('dados reais: respostas da API conferem com a planilha', { skip: 'sem testes/dados-reais' }, () => {});
+for (const ex of EXEMPLOS) {
+  test(`dados reais (${ex.arquivo}): planilha com os valores do site confere; total do cabeçalho vale`, () => {
+    // o site real manda todas as listas como array, com o total só no cabeçalho register-count (Q1)
+    for (const r of ex.respostas) {
+      assert.ok(Array.isArray(r.corpo), `${r.lista}: corpo em array`);
+      assert.match(String(r.registros), /^\d+$/, `${r.lista}: register-count`);
+    }
+    const site = siteReal(ex.respostas);
+    const grade = reais.planilha(site.itens);
+    const desativadas = new Set(reais.colunasVazias(grade).map((i) => V.COLUNAS[i].id));
+    const a = V.analisar(grade, site, semPadroes(), desativadas);
+    const soltos = ex.respostas.find((r) => r.lista === 'item');
+    const total = Number(soltos.registros) + site.grupos.reduce((s, g) => s + g.total, 0);
+    assert.deepEqual(a.divergem, []);
+    assert.equal(a.conferem.length, site.itens.length);
+    assert.deepEqual(a.totaisNaoInformados, []);
+    // completa só se o site exibiu todos os itens que diz ter (634177: 10 de 148 exibidos -> incompleta)
+    assert.equal(a.completa, site.itens.length >= total, `${site.itens.length} de ${total}`);
+    if (site.itens.length < total) {
+      assert.equal(a.total, total);
+      assert.match(V.relatorio(a, ex.id), new RegExp(`O site exibiu só ${site.itens.length} de ${total} itens`));
+    }
+    // e diverge quando a planilha muda
+    const errada = grade.map((l) => l.slice());
+    errada[0][V.COLUNAS.findIndex((c) => c.id === 'valor')] = '0,01';
+    assert.deepEqual(V.analisar(errada, site, semPadroes(), desativadas).divergem.map((l) => l.item), [Number(grade[0][0])]);
+  });
+}

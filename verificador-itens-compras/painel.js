@@ -15,7 +15,7 @@
 
   const estado = {
     id: null, // contratação da página
-    recebidos: new Map(), // id da contratação -> { listas: { chave: {itens, total} }, grupos: Map }: o que o site exibiu
+    recebidos: new Map(), // id da contratação -> { listas: { chave: {itens, total} }, grupos: Map, totalGrupos }: o que o site exibiu
     grade: [V.linhaVazia()],
     padroes: V.linhaVazia(), // padrão de cada coluna (linha "Todos")
     desativadas: new Set(), // ids das colunas com a verificação desativada (caixa do cabeçalho)
@@ -182,13 +182,15 @@
   /** Itens que o site exibe na contratação da página (juntando os grupos expandidos), ou null se nada chegou. */
   function doSite() {
     const r = estado.recebidos.get(estado.id);
-    return r ? V.juntarSite(r.listas, [...r.grupos.values()]) : null;
+    return r ? V.juntarSite(r.listas, [...r.grupos.values()], r.totalGrupos) : null;
   }
 
   const orientacao = (a) =>
-    a.temGrupos
-      ? 'Expanda todos os grupos na página e, se preciso, aumente "Quantidade máxima de registros listados".'
-      : 'Aumente "Quantidade máxima de registros listados" na página.';
+    a.gruposNaoListados
+      ? 'Exiba todos os grupos na página (passe por todas as páginas da lista de grupos ou aumente a quantidade de registros listados) e expanda cada um.'
+      : a.temGrupos
+        ? 'Expanda todos os grupos na página e, se preciso, aumente "Quantidade máxima de registros listados".'
+        : 'Aumente "Quantidade máxima de registros listados" na página.';
 
   // ---------- montagem ----------
 
@@ -517,9 +519,13 @@
     const caixa = el('div', 'alerta');
     const texto = el('div');
     texto.append(el('b', '', 'Conferência incompleta: "sem divergência" não significa que está tudo certo.'));
-    if (a.total || a.naoExibidos.length) {
+    if (a.totaisNaoInformados.length) {
+      texto.append(el('div', '', `O site não informou o total de ${V.textoTotais(a.totaisNaoInformados)}: não dá para saber se todos os itens estão exibidos. Recarregue a página (F5); se continuar, a extensão precisa ser atualizada.`));
+    }
+    if (a.total || a.naoExibidos.length || a.gruposNaoListados || a.gruposIncompletos.length) {
       const partes = [];
       if (a.total) partes.push(`O site está exibindo só ${a.itens.length} de ${a.total} itens.`);
+      if (a.gruposNaoListados) partes.push(`O site listou só ${a.gruposNaoListados.recebidos} de ${a.gruposNaoListados.total} grupos.`);
       if (a.gruposIncompletos.length) partes.push(`Grupos não exibidos por completo: ${V.textoGrupos(a.gruposIncompletos)}.`);
       if (a.naoExibidos.length) partes.push(`${plural(a.naoExibidos.length, 'item', 'itens')} da planilha NÃO ${a.naoExibidos.length === 1 ? 'exibido' : 'exibidos'} pelo site, portanto NÃO ${a.naoExibidos.length === 1 ? 'conferido' : 'conferidos'}: ${V.faixas(a.naoExibidos)}.`);
       partes.push(orientacao(a));
@@ -581,11 +587,15 @@
     // Guarda por contratação: a resposta atrasada de outra contratação não apaga a lista da atual.
     const id = String(d.contratacao);
     let r = estado.recebidos.get(id);
-    if (!r) estado.recebidos.set(id, (r = { listas: {}, grupos: new Map() }));
+    if (!r) estado.recebidos.set(id, (r = { listas: {}, grupos: new Map(), totalGrupos: undefined }));
     const dados = d.dados.filter((x) => x && typeof x === 'object');
-    // grupos: acumulam (a lista de grupos também é paginada); listas de itens: vale a última resposta de cada uma
-    if (d.lista === 'grupos') for (const g of dados) r.grupos.set(g.id, g);
-    else r.listas[d.lista] = { itens: dados, total: Number.isFinite(d.total) ? d.total : undefined };
+    const total = Number.isFinite(d.total) ? d.total : undefined;
+    // grupos: acumulam (a lista de grupos também é paginada) e o total de grupos vale pela última resposta;
+    // listas de itens: vale a última resposta de cada uma
+    if (d.lista === 'grupos') {
+      for (const g of dados) r.grupos.set(g.id, g);
+      r.totalGrupos = total;
+    } else r.listas[d.lista] = { itens: dados, total };
     if (!raiz || id !== estado.id) return;
     if (completarItens()) montarGrade();
     else atualizar();

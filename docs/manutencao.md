@@ -43,7 +43,7 @@ Se o diff cabe em uma frase e não muda comportamento (texto, CSS, comentário),
 Checklist de revisão de qualquer diff:
 
 - [ ] Nenhum caminho novo leva a verde sem comparação (P0). Para cada `return`/`continue` antecipado em `analisar`, o que acontece com `completa`?
-- [ ] `interceptor.js` continua sem fazer requisições, sem ler cabeçalhos, sem alterar a resposta, com todo código dentro de `try/catch`.
+- [ ] `interceptor.js` continua sem fazer requisições, sem ler cabeçalho além de `register-count`, sem alterar a resposta, com todo código dentro de `try/catch`.
 - [ ] Nenhum `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `eval`, `new Function` ou `setTimeout` com string.
 - [ ] `manifest.json` sem `permissions`, `host_permissions` ou novos `matches`.
 - [ ] Nenhuma dependência de execução, `storage`, cookie ou chamada de rede.
@@ -57,7 +57,7 @@ Checklist de revisão de qualquer diff:
 
 Sintomas: "Aguardando a lista de itens do site…" para sempre; ou tudo diverge; ou uma coluna mostra "—" no lado do site.
 
-1. No DevTools (aba Rede) da página de resumo, ache a requisição da lista e compare com a seção 3 de `arquitetura.md`: caminho, método, status, forma do corpo, nomes dos campos.
+1. No DevTools (aba Rede) da página de resumo, ache a requisição da lista e compare com a seção 3 de `arquitetura.md`: caminho, método, status, forma do corpo, cabeçalho `register-count`, nomes dos campos. Melhor: salve um HAR, extraia com `testes/dados-reais/extrair_har.py`, anonimize e rode os testes "dados reais".
 2. Caminho mudou → regex `PADRAO` em `interceptor.js`. Forma do corpo mudou → `repassar()`. Campo mudou → `site`/`confere` da coluna em `COLUNAS`.
 3. Atualize os mocks de `painel.test.js` (e os itens de exemplo de `verificacao.test.js`) para o formato novo **antes** do código.
 4. Atualize a seção 3 de `arquitetura.md`.
@@ -114,6 +114,6 @@ Encontradas na engenharia reversa (16/11/2026); nenhuma foi alterada:
 1. **Controle de versão.** Resolvido: repositório git iniciado na v0.1; `.gitignore` exclui `node_modules/` e `testes/capturas/` (geradas pelos testes).
 2. **Playwright não declarado.** Sem `package.json`, os testes do painel não rodam numa máquina limpa (nesta data, falharam aqui por falta do pacote; os 37 testes de lógica passaram). Um `package.json` na raiz, só com `devDependencies` e versão fixada, resolve sem tocar na extensão.
 3. **Sem lint nem análise estática.** Um ESLint com regra contra `innerHTML`/`eval` automatizaria parte da seção 4.
-4. **Fixtures reais.** Os testes usam itens inventados; uma resposta real anonimizada de cada endpoint detectaria mudança de formato e responderia a Q1 da spec.
-5. **Questões em aberto** Q1–Q3 da spec, em especial Q1 (possível falso "confere").
+4. **Fixtures reais.** Resolvido em parte (19/11/2026): `testes/dados-reais/` (fora do git) tem respostas reais anonimizadas de três contratações; os testes "dados reais" as usam quando a pasta existe e são pulados quando não. Os mocks dos testes seguem esse formato.
+5. **Questões em aberto** Q2–Q3 da spec. Q1 resolvida na v0.2 (era um falso "confere").
 6. **Lacunas de teste** listadas no fim de `arquitetura.md`.

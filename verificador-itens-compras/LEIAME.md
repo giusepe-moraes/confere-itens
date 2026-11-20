@@ -1,8 +1,14 @@
-# Verificador de Itens – Compras.gov (v0.1)
+# Verificador de Itens – Compras.gov (v0.2)
 
 Confere os itens de uma contratação com a sua planilha, direto na página de resumo do Compras.gov:
 
 `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-artefatos-web/execucao/resume?id=...`
+
+## Novidades da v0.2
+
+- **Corrige um falso "confere"**: o site informa o total de itens só no cabeçalho da resposta, que a v0.1 não lia. Com 10 itens exibidos de 148, uma planilha com aqueles 10 saía verde; agora aparece "O site está exibindo só 10 de 148 itens" e a conferência fica incompleta.
+- Se o site não informar o total de itens ou de grupos, a conferência fica **incompleta** ("O site não informou o total…"): recarregue a página.
+- A lista de grupos também é paginada: enquanto o site não tiver listado todos os grupos, o painel avisa "O site listou só N de M grupos". Passe pelas páginas da lista de grupos (eles se somam) e expanda cada um.
 
 ## Instalação
 
@@ -20,7 +26,7 @@ Para atualizar: substitua os arquivos, recarregue a extensão em `chrome://exten
 
 A grade **só recebe valores colados** (Ctrl+V, de um bloco ou de uma célula): não dá para digitar nem apagar nela. Só a linha "Todos" é editável. Para recomeçar, use **Limpar** (zera a grade, a linha Todos e reativa todas as colunas).
 
-**Contratação com grupos**: os itens só aparecem quando você expande cada grupo na página. Expanda todos os grupos; o painel junta os itens de todos os grupos já expandidos. Enquanto faltar algum grupo, o painel mostra a conferência como incompleta e diz quais grupos faltam, por exemplo "GRUPO 2 (0 de 6)".
+**Contratação com grupos**: os itens só aparecem quando você expande cada grupo na página. Expanda todos os grupos; o painel junta os itens de todos os grupos já expandidos. Enquanto faltar algum grupo, o painel mostra a conferência como incompleta e diz quais grupos faltam, por exemplo "GRUPO 2 (0 de 6)". A lista de grupos também tem páginas: se o site ainda não listou todos ("O site listou só 10 de 12 grupos"), passe pelas outras páginas da lista de grupos; os grupos se somam.
 
 A conferência usa os itens que o site está exibindo no momento. Se o site exibe menos itens do que a planilha (por exemplo, 10 de 148), aumente **Quantidade máxima de registros listados** na página. Quando o site exibe itens que ainda não estão na grade (por exemplo, ao mudar de página na lista), a extensão acrescenta uma linha para cada um, em ordem; as linhas existentes não são alteradas. A extensão não faz requisições: só lê a resposta da lista de itens que o próprio site carrega.
 
@@ -60,7 +66,7 @@ Colando com cabeçalho, a grade é substituída, as colunas são reconhecidas pe
 - Linha hachurada com barra amarela: o item da planilha não está na lista exibida pelo site, portanto **não foi conferido**.
 - Célula vermelha: diverge do site. Célula amarela: valor não reconhecido. Célula ou coluna **hachurada**: não conferida (ou coluna desativada, com o nome riscado e a caixa desmarcada).
 - Barra à esquerda da linha: verde = tudo conferido e sem divergência; amarela = sem divergência, mas com células não conferidas; vermelha = diverge.
-- **Conferência incompleta**: quando o site não exibe todos os itens (da planilha, do total que a própria resposta do site informa ou dos grupos ainda não expandidos) ou quando alguma coluna ou célula não foi conferida, o painel mostra um aviso amarelo com as colunas e os itens não conferidos, o contador verde vira "sem divergência no que foi conferido" e o relatório copiado traz "ATENÇÃO: CONFERÊNCIA INCOMPLETA".
+- **Conferência incompleta**: quando o site não exibe todos os itens (da planilha, do total que a própria resposta do site informa, dos grupos ainda não listados ou não expandidos), quando o site não informa esse total ou quando alguma coluna ou célula não foi conferida, o painel mostra um aviso amarelo com as colunas e os itens não conferidos, o contador verde vira "sem divergência no que foi conferido" e o relatório copiado traz "ATENÇÃO: CONFERÊNCIA INCOMPLETA".
 - **Linha ignorada**: linha da planilha sem número de item válido (`3A`, `TOTAL`, em branco) ou com item repetido (vale a primeira) não é conferida. A célula ITEM fica amarela e a conferência fica **incompleta**, com as linhas listadas no aviso e no relatório. Cole de novo sem essas linhas ou corrija o número.
 - **Próximo erro**: vai à próxima célula vermelha ou amarela e mostra o motivo; no último erro, volta ao primeiro. Aparece sempre que houver célula vermelha ou amarela, mesmo sem item divergente.
 - Passe o mouse em qualquer célula, cabeçalho ou contador para ver os detalhes.
@@ -70,7 +76,7 @@ A planilha fica só na memória da aba; nada é gravado. Ao trocar de contrataç
 
 ## Arquivos
 
-- `interceptor.js`: observa as respostas (só GET) da lista de itens, da lista de grupos e dos itens de cada grupo (contexto da página).
+- `interceptor.js`: observa as respostas (só GET) da lista de itens, da lista de grupos e dos itens de cada grupo, com o total de cada lista (contexto da página).
 - `verificacao.js`: colunas, leitura da colagem e conferência (também roda no Node, via `require`).
 - `painel.js`: painel e grade.
 

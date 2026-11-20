@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
+const reais = require('./apoio-dados-reais.js');
 
 const EXT = process.env.EXT || path.join(__dirname, '..', 'verificador-itens-compras');
 const CAPTURAS = path.join(__dirname, 'capturas');
@@ -17,36 +18,67 @@ const ler = (f) => fs.readFileSync(path.join(EXT, f), 'utf8');
 const SCRIPTS = [ler('interceptor.js'), ler('verificacao.js'), ler('painel.js').replace("mode: 'closed'", "mode: 'open'")];
 
 // ---------- dados simulados da API ----------
+// No formato do site real (ver testes/dados-reais/): listas em array com status 206 e o total só nos cabeçalhos
+// de paginação. A contratação 456 usa o formato antigo, objeto com o total no corpo, que continua aceito.
 
 function item(n, extra = {}) {
   return {
-    numeroItem: n, nomeItem: `Produto ${n}`, codigoItem: 400000 + n,
+    numeroItem: n, nomeItem: `Produto ${n}`, codigoItem: String(400000 + n),
     quantidadeItens: 100, quantidadeMinimaAquisicao: 100, valorUnitario: 8.9962,
     valorSigiloso: false, intervaloMinimo: 0.5,
-    tipoBeneficio: { id: 0, nome: 'Sem benefício', desempateFicto: false, cotaReservada: false, subContratacao: false },
-    criterioJulgamento: { nome: 'Menor Preço', maiorDesconto: false },
+    tipoBeneficio: { id: 0, nome: 'Sem benefícios ME/EPP', subContratacao: false, cotaReservada: false, desempateFicto: false },
+    idCriterioJulgamento: 1, nomeCriterioJulgamento: 'Menor preço',
+    criterioJulgamento: { id: 1, nome: 'Menor preço', menorPrecoMaiorDesconto: false, maiorDesconto: false, aplicavel: true },
+    idGrupo: null,
     ...extra,
   };
 }
+const ate = (n) => Array.from({ length: n }, (_, i) => i + 1);
 const ITENS = {
   123: [item(1), item(2, { valorUnitario: 1.5 }), item(3), item(4), item(5)],
   456: [item(1), item(2)],
-  777: [], // contratação com grupos: a lista de itens fora de grupo vem vazia
+  777: [], // contratações com grupos: a lista de itens fora de grupo vem vazia (register-count 0)
+  778: [],
+  888: ate(12).map((n) => item(n)), // Q1: o site exibe uma página e diz o total só no cabeçalho
+  999: [item(1), item(2)],
 };
-// Contratação 777: dois grupos; os itens só chegam ao expandir cada grupo (respostas em array, status 206, como no site real).
+const FORMATO_ANTIGO = new Set(['456']); // { content, totalElements }, status 200
+const SEM_TOTAL = new Set(['999']); // resposta sem o cabeçalho register-count
+// Grupos: os itens só chegam ao expandir cada grupo. A 778 tem 3 grupos e é aberta com 2 grupos por página.
 const GRUPOS = {
   777: [
     { id: 57339, sequencialGrupo: 1, nomeGrupo: 'GRUPO 1', quantidadeItens: 3 },
     { id: 57341, sequencialGrupo: 2, nomeGrupo: 'GRUPO 2', quantidadeItens: 2 },
+  ],
+  778: [
+    { id: 60001, sequencialGrupo: 1, nomeGrupo: 'GRUPO 1', quantidadeItens: 2 },
+    { id: 60002, sequencialGrupo: 2, nomeGrupo: 'GRUPO 2', quantidadeItens: 2 },
+    { id: 60003, sequencialGrupo: 3, nomeGrupo: 'GRUPO 3', quantidadeItens: 1 },
   ],
 };
 const ITENS_GRUPO = {
   57339: [1, 2, 3].map((n) => item(n, { idGrupo: 57339 })),
   // no site real, os itens de grupo vieram com quantidadeMinimaAquisicao null
   57341: [4, 5].map((n) => item(n, { idGrupo: 57341, valorSigiloso: true, quantidadeMinimaAquisicao: null })),
+  60001: [1, 2].map((n) => item(n, { idGrupo: 60001 })),
+  60002: [3, 4].map((n) => item(n, { idGrupo: 60002 })),
+  60003: [item(5, { idGrupo: 60003 })],
 };
 
-// Página falsa: lista os itens com XHR (como o Angular) ou fetch, com "Quantidade máxima de registros listados".
+/** Resposta paginada como a do site real: uma página do array (tamanhoPagina/pagina), status 206, total nos cabeçalhos. */
+function lista206(todos, u, semTotal = false) {
+  const tam = Number(u.searchParams.get('tamanhoPagina')) || 10;
+  const pag = Number(u.searchParams.get('pagina')) || 0;
+  const headers = {
+    'access-control-expose-headers': 'Message-Severity, Message-Summary, Message-Detail, Message-Sticky, Content-Disposition, Pages-Count, Register-Count, Register-Count-Unfiltered, Search-Term, Page, Page-Size',
+    page: String(pag), 'page-size': String(tam), 'pages-count': String(Math.ceil(todos.length / tam)), 'register-count': String(todos.length),
+  };
+  if (semTotal) delete headers['register-count'];
+  return { status: 206, contentType: 'application/json', headers, body: JSON.stringify(todos.slice(pag * tam, (pag + 1) * tam)) };
+}
+
+// Página falsa: pede as listas com XHR (como o Angular) ou fetch, com os parâmetros do site real (tamanhoPagina, pagina).
+// "Quantidade máxima de registros listados" muda o tamanhoPagina dos itens; &tamGrupos= na URL, o da lista de grupos.
 const HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Compras.gov (simulado)</title>
 <style>body{font:14px sans-serif;margin:0;background:#f8f8f8}header{background:#071d41;color:#fff;padding:14px 20px}
 main{padding:20px}table{border-collapse:collapse;background:#fff}td,th{border:1px solid #ccc;padding:4px 8px}</style></head>
@@ -54,23 +86,36 @@ main{padding:20px}table{border-collapse:collapse;background:#fff}td,th{border:1p
 <label>Quantidade máxima de registros listados <select id="tam"><option>3</option><option>5</option></select></label>
 <table><thead><tr><th>Item</th><th>Descrição</th></tr></thead><tbody id="lista"></tbody></table><div id="grupos"></div></main>
 <script>
-  const id = new URLSearchParams(location.search).get('id');
+  const q = new URLSearchParams(location.search);
+  const id = q.get('id');
   const xhr = (url, cb) => { const x = new XMLHttpRequest(); x.open('GET', url); x.responseType = 'json'; x.onload = () => cb(x.response); x.send(); };
   const API = '/comprasnet-artefatos/api/v1/contratacao-execucao/' + id + '/grupo';
-  xhr(API + '?tamanhoPagina=10&pagina=0', (gs) => {
-    document.getElementById('grupos').innerHTML = gs.map(g => '<p><button data-g="'+g.id+'">'+g.nomeGrupo+' | '+g.quantidadeItens+' itens</button></p>').join('');
-    document.querySelectorAll('#grupos button').forEach(b => b.onclick = () =>
-      xhr(API + '/' + b.dataset.g + '/item?pagina=0&tamanhoPagina=10', (its) => b.after(' itens ' + its.map(i => i.numeroItem).join(', '))));
-  });
+  window.carregarGrupos = function (pagina = 0) {
+    xhr(API + '?tamanhoPagina=' + (q.get('tamGrupos') || 10) + '&pagina=' + pagina, (gs) => {
+      for (const g of gs) {
+        const b = document.createElement('button');
+        b.textContent = g.nomeGrupo + ' | ' + g.quantidadeItens + ' itens';
+        b.onclick = () => xhr(API + '/' + g.id + '/item?pagina=0&tamanhoPagina=10', (its) => b.after(' itens ' + its.map(i => i.numeroItem).join(', ')));
+        const p = document.createElement('p');
+        p.append(b);
+        document.getElementById('grupos').append(p);
+      }
+    });
+  };
   function mostrar(d) { d = Array.isArray(d) ? { content: d } : d; document.getElementById('lista').innerHTML = d.content.map(i => '<tr><td>'+i.numeroItem+'</td><td>'+i.nomeItem+'</td></tr>').join(''); }
   window.carregar = function (tam, comFetch, idc = id) {
-    const url = '/comprasnet-artefatos/api/v1/contratacaoexecucao/contratacao/' + idc + '/item?size=' + tam;
+    const url = '/comprasnet-artefatos/api/v1/contratacaoexecucao/contratacao/' + idc + '/item?tamanhoPagina=' + tam + '&pagina=0';
     if (comFetch) return fetch(url).then(r => r.json()).then(mostrar);
     const x = new XMLHttpRequest(); x.open('GET', url); x.responseType = 'json'; x.onload = () => mostrar(x.response); x.send();
   };
   document.getElementById('tam').onchange = (e) => carregar(e.target.value);
+  carregarGrupos();
   carregar(3);
 </script></body></html>`;
+
+// respostas gravadas do site real, por contratação e caminho (sem a pasta testes/dados-reais: nenhuma)
+const EXEMPLOS = reais.exemplos();
+const GRAVADAS = new Map(EXEMPLOS.flatMap((ex) => ex.respostas.map((r) => [new URL(r.url).pathname, r])));
 
 // ---------- infraestrutura ----------
 
@@ -83,15 +128,17 @@ test.before(async () => {
   await contexto.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: ORIGEM });
   await contexto.route(`${ORIGEM}/**`, (rota) => {
     const u = new URL(rota.request().url());
+    const gravada = GRAVADAS.get(u.pathname); // dados reais: a resposta gravada, com status e cabeçalhos
+    if (gravada) return rota.fulfill({ status: gravada.status, headers: gravada.cabecalhos, body: JSON.stringify(gravada.corpo) });
     const g = /\/contratacao-execucao\/(\d+)\/grupo(?:\/(\d+)\/item)?$/.exec(u.pathname);
-    if (g) return rota.fulfill({ status: 206, contentType: 'application/json', body: JSON.stringify(g[2] ? ITENS_GRUPO[g[2]] || [] : GRUPOS[g[1]] || []) });
+    if (g) return rota.fulfill(lista206((g[2] ? ITENS_GRUPO[g[2]] : GRUPOS[g[1]]) || [], u));
     const m = /\/contratacao\/(\d+)\/item$/.exec(u.pathname);
-    if (m && GRUPOS[m[1]]) return rota.fulfill({ status: 206, contentType: 'application/json', body: '[]' });
-    if (m) {
-      const todos = ITENS[m[1]] || [];
-      const tam = Number(u.searchParams.get('size')) || todos.length;
+    if (m && FORMATO_ANTIGO.has(m[1])) {
+      const todos = ITENS[m[1]];
+      const tam = Number(u.searchParams.get('tamanhoPagina')) || todos.length;
       return rota.fulfill({ contentType: 'application/json', body: JSON.stringify({ content: todos.slice(0, tam), totalElements: todos.length }) });
     }
+    if (m) return rota.fulfill(lista206(ITENS[m[1]] || [], u, SEM_TOTAL.has(m[1])));
     if (u.pathname.startsWith('/comprasnet-artefatos-web/')) return rota.fulfill({ contentType: 'text/html', body: HTML });
     return rota.fulfill({ status: 404, body: '' });
   });
@@ -126,6 +173,7 @@ async function colar(texto, r, c) {
 }
 
 const tsv = (linhas) => linhas.map((l) => l.join('\t')).join('\r\n') + '\r\n';
+const texto = async () => resumo().innerText();
 const CABECALHO = ['ITEM', 'DESCRIÇÃO', 'CATMAT', 'QUANTIDADE', 'VALOR', 'VALOR TOTAL', 'TIPO DE BENEFÍCIO', 'QUANTIDADE MÍNIMA', 'CRITÉRIO DE JULGAMENTO', 'INTERVALO MÍNIMO', 'VALOR SIGILOSO'];
 const linhaOk = (n, extra = {}) => {
   const v = { ITEM: n, DESCRIÇÃO: 'x', CATMAT: 400000 + n, QUANTIDADE: '100', VALOR: 'R$ 8,9962', 'VALOR TOTAL': '899,62', 'TIPO DE BENEFÍCIO': 'Sem benefícios', 'QUANTIDADE MÍNIMA': '100', 'CRITÉRIO DE JULGAMENTO': 'Menor preço', 'INTERVALO MÍNIMO': '0,5', 'VALOR SIGILOSO': 'Não', ...extra };
@@ -427,8 +475,8 @@ test('só GET é lido como lista; XHR reaproveitado não troca a contratação d
   await page.goto(pagina(456));
   await sub().filter({ hasText: 'id 456 · 2 itens exibidos' }).waitFor();
   // POST na URL da lista (ex.: inclusão de item): a resposta não é a lista exibida
-  await page.evaluate((u) => fetch(u, { method: 'POST' }).then((r) => r.text()), API_ITENS(456, '?size=1'));
-  await page.evaluate((u) => new Promise((ok) => { const x = new XMLHttpRequest(); x.open('POST', u); x.onload = ok; x.send(); }), API_ITENS(456, '?size=1'));
+  await page.evaluate((u) => fetch(u, { method: 'POST' }).then((r) => r.text()), API_ITENS(456, '?tamanhoPagina=1&pagina=0'));
+  await page.evaluate((u) => new Promise((ok) => { const x = new XMLHttpRequest(); x.open('POST', u); x.onload = ok; x.send(); }), API_ITENS(456, '?tamanhoPagina=1&pagina=0'));
   // o mesmo XHR aberto para a lista da 456 e, depois, para a da 123: a resposta é da 123
   await page.evaluate(([a, b]) => new Promise((ok) => { const x = new XMLHttpRequest(); x.open('GET', a); x.open('GET', b); x.onload = ok; x.send(); }), [API_ITENS(456), API_ITENS(123)]);
   await page.waitForTimeout(400);
@@ -486,6 +534,69 @@ test('linha ignorada e padrão não reconhecido: aviso de incompleta, Próximo e
   await host().locator('.cab button[data-dica="Copiar relatório"]').waitFor({ timeout: 3000 });
 });
 
+test('Q1: total só no cabeçalho register-count (XHR e fetch): planilha igual aos itens exibidos não fica verde', async () => {
+  await page.goto(pagina(888));
+  await sub().filter({ hasText: 'id 888 · 3 de 12 itens exibidos' }).waitFor();
+  // a planilha tem exatamente os 3 itens que o site exibe, todos certos: na v0.1 sairia verde
+  await colar(tsv([CABECALHO, ...[1, 2, 3].map((n) => linhaOk(n))]), 0, 0);
+  let r = await texto();
+  assert.match(r, /3 sem divergência no que foi conferido/);
+  assert.match(r, /Conferência incompleta/);
+  assert.match(r, /O site está exibindo só 3 de 12 itens/);
+  assert.match(await host().locator('.pilula').innerText(), /Conferência incompleta/);
+  await captura('12-q1-total-no-cabecalho');
+  // fetch: o total também vem do cabeçalho
+  await page.evaluate(() => carregar(5, true));
+  await sub().filter({ hasText: 'id 888 · 5 de 12 itens exibidos' }).waitFor();
+  // o site exibe todos: completa
+  await page.evaluate(() => carregar(12));
+  await sub().filter({ hasText: 'id 888 · 12 itens exibidos' }).waitFor();
+  await colar(tsv([CABECALHO, ...ate(12).map((n) => linhaOk(n))]), 0, 0);
+  r = await texto();
+  assert.match(r, /12 conferem/);
+  assert.doesNotMatch(r, /incompleta/i);
+});
+
+test('Q1: resposta sem o total (sem register-count) deixa a conferência incompleta', async () => {
+  await page.goto(pagina(999));
+  await sub().filter({ hasText: 'id 999 · 2 itens exibidos' }).waitFor();
+  await colar(tsv([CABECALHO, linhaOk(1), linhaOk(2)]), 0, 0);
+  const r = await texto();
+  assert.match(r, /2 sem divergência no que foi conferido/);
+  assert.match(r, /O site não informou o total de itens fora de grupo: não dá para saber se todos os itens estão exibidos\. Recarregue a página \(F5\)/);
+  await captura('13-q1-sem-total');
+  await host().locator('.cab button').first().click();
+  const rel = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(rel, /ATENÇÃO: CONFERÊNCIA INCOMPLETA\n {3}- O site não informou o total de itens fora de grupo/);
+});
+
+test('contratação com grupos: lista de grupos paginada; enquanto faltar grupo na lista, fica incompleta', async () => {
+  await page.goto(pagina(778) + '&tamGrupos=2');
+  await sub().filter({ hasText: 'id 778 · 0 de 4 itens exibidos' }).waitFor(); // só os 2 grupos listados entram no total
+  await page.getByRole('button', { name: /GRUPO 1/ }).click();
+  await page.getByRole('button', { name: /GRUPO 2/ }).click();
+  await sub().filter({ hasText: 'id 778 · 4 itens exibidos' }).waitFor();
+  await colar(tsv([CABECALHO, ...[1, 2, 3, 4].map((n) => linhaOk(n))]), 0, 0);
+  let r = await texto();
+  assert.match(r, /4 sem divergência no que foi conferido/);
+  assert.match(r, /O site listou só 2 de 3 grupos\./);
+  assert.match(r, /Exiba todos os grupos/);
+  assert.doesNotMatch(r, /Grupos não exibidos por completo/);
+  await captura('14-grupos-paginados');
+  // próxima página da lista de grupos: os grupos acumulam
+  await page.evaluate(() => carregarGrupos(1));
+  await sub().filter({ hasText: 'id 778 · 4 de 5 itens exibidos' }).waitFor();
+  r = await texto();
+  assert.doesNotMatch(r, /listou só/);
+  assert.match(r, /Grupos não exibidos por completo: GRUPO 3 \(0 de 1\)/);
+  await page.getByRole('button', { name: /GRUPO 3/ }).click();
+  await sub().filter({ hasText: 'id 778 · 5 itens exibidos' }).waitFor();
+  await colar(tsv([CABECALHO, ...ate(5).map((n) => linhaOk(n))]), 0, 0);
+  r = await texto();
+  assert.match(r, /5 conferem/);
+  assert.doesNotMatch(r, /incompleta/i);
+});
+
 test('sair da página de resumo e voltar: o que o site exibiu antes deixa de valer; a planilha continua', async () => {
   await page.goto(pagina(777));
   await sub().filter({ hasText: '0 de 5' }).waitFor();
@@ -512,3 +623,38 @@ test('sair da página de resumo e voltar: o que o site exibiu antes deixa de val
   await sub().filter({ hasText: 'id 777 · 0 de 5 itens exibidos' }).waitFor();
   assert.match(await resumo().innerText(), /Grupos não exibidos por completo: GRUPO 1 \(0 de 3\), GRUPO 2 \(0 de 2\)/);
 });
+
+// ---------- dados reais (testes/dados-reais, fora do git; pulados sem a pasta) ----------
+// A página falsa pede as listas; a rota responde com o que o site real respondeu (corpo, status 206 e cabeçalhos).
+
+if (!EXEMPLOS.length) test('dados reais: painel com as respostas gravadas do site', { skip: 'sem testes/dados-reais' }, () => {});
+for (const ex of EXEMPLOS) {
+  test(`dados reais (${ex.arquivo}): painel lê o total do cabeçalho e confere a planilha com os valores do site`, async () => {
+    const soltos = ex.respostas.find((r) => r.lista === 'item');
+    const grupos = (ex.respostas.find((r) => r.lista === 'grupos') || { corpo: [] }).corpo;
+    const itensGrupos = ex.respostas.filter((r) => r.lista.startsWith('grupo/'));
+    const total = Number(soltos.registros) + grupos.reduce((s, g) => s + g.quantidadeItens, 0);
+    await page.goto(pagina(ex.id));
+    const exibidos = soltos.corpo.length;
+    await sub().filter({ hasText: `id ${ex.id} · ${exibidos < total ? `${exibidos} de ${total}` : `${exibidos} `}` }).waitFor();
+    for (const g of grupos.filter((g) => itensGrupos.some((r) => r.lista === 'grupo/' + g.id))) {
+      await page.getByRole('button', { name: new RegExp(`^${g.nomeGrupo} \\|`) }).click();
+    }
+    const itens = [soltos, ...itensGrupos].flatMap((r) => r.corpo);
+    const linhas = reais.planilha(itens);
+    await colar(tsv([reais.CABECALHO, ...linhas]), 0, 0);
+    for (const c of reais.colunasVazias(linhas)) await caixa(c).click(); // campo que o site não tem nesta contratação
+    await sub().filter({ hasText: `id ${ex.id} · ${itens.length < total ? `${itens.length} de ${total}` : `${itens.length} ${itens.length === 1 ? 'item exibido' : 'itens exibidos'}`}` }).waitFor();
+    const r = await texto();
+    assert.doesNotMatch(r, /diverge/);
+    if (itens.length < total) {
+      // 634177: 10 de 148 itens exibidos; a v0.1 daria verde
+      assert.match(r, new RegExp(`${itens.length} sem divergência no que foi conferido`));
+      assert.match(r, new RegExp(`O site está exibindo só ${itens.length} de ${total} itens`));
+    } else {
+      assert.match(r, new RegExp(`${itens.length} conferem`));
+      assert.doesNotMatch(r, /incompleta/i);
+    }
+    await captura(`20-dados-reais-${ex.arquivo.replace(/-api\.json$/, '')}`);
+  });
+}

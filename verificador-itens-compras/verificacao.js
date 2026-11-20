@@ -9,6 +9,7 @@
  *   Célula vazia (CATMAT, QUANTIDADE, QUANTIDADE MÍNIMA, VALOR) ... não verifica aquele item.
  *   Padrão não reconhecido ...... não vale para nenhuma célula (a coluna fica sem padrão).
  *   Linha sem número de item válido, ou com item repetido ... ignorada, e a conferência fica incompleta.
+ *   Site sem o total de itens ou de grupos ... não há como saber se tudo está exibido: incompleta.
  *
  * Regra geral: o que não foi conferido nunca conta como "confere".
  */
@@ -285,28 +286,44 @@
 
   // ---------- listas do site ----------
 
+  // Totais sem os quais não há como saber se o site exibiu tudo (ver juntarSite).
+  const ITENS_FORA = 'itens fora de grupo';
+  const GRUPOS = 'grupos';
+
   /**
    * Junta as listas que o site exibiu numa contratação.
-   *   listas: { 'item': {itens, total}, 'grupo/{id}': {itens} } — última resposta de cada lista
+   *   listas: { 'item': {itens, total}, 'grupo/{id}': {itens, total} } — última resposta de cada lista
    *           ('item' = itens fora de grupo; 'grupo/{id}' = itens de um grupo expandido).
-   *   grupos: grupos da contratação ({ id, nomeGrupo, quantidadeItens }), se houver.
-   * Devolve { itens, total, grupos: [{ nome, exibidos, total }] }. Com grupos, o total é a soma dos
-   * itens de cada grupo mais os itens fora de grupo.
+   *   grupos: grupos recebidos da contratação ({ id, nomeGrupo, quantidadeItens }; a lista é paginada e acumula).
+   *   totalGrupos: total de grupos informado pelo site (última resposta da lista de grupos).
+   * Devolve { itens, total, grupos: [{ nome, exibidos, total }], totaisNaoInformados, gruposNaoListados }.
+   *   total: itens fora de grupo + soma dos itens de cada grupo recebido; undefined se o site não informou
+   *          o total dos itens fora de grupo (não se supõe que a lista exibida é a lista inteira).
+   *   totaisNaoInformados: ['itens fora de grupo', 'grupos'], ou parte: totais que o site não informou (ou cuja lista não chegou).
+   *   gruposNaoListados: { recebidos, total } se o site informou mais grupos do que os recebidos; senão null.
    */
-  function juntarSite(listas, grupos) {
+  function juntarSite(listas, grupos, totalGrupos) {
     const porNumero = new Map();
     for (const l of Object.values(listas)) for (const it of l.itens) porNumero.set(Number(it.numeroItem), it);
     const soltos = listas.item;
-    let total = soltos && soltos.total;
-    const resumoGrupos = (grupos || []).map((g) => ({
+    const totalSoltos = soltos && Number.isFinite(soltos.total) ? soltos.total : undefined;
+    const recebidos = grupos || [];
+    const resumoGrupos = recebidos.map((g) => ({
       nome: limpo(g.nomeGrupo) || `Grupo ${g.sequencialGrupo ?? g.id}`,
       exibidos: listas['grupo/' + g.id] ? listas['grupo/' + g.id].itens.length : 0,
       total: Number(g.quantidadeItens) || 0,
     }));
-    if (resumoGrupos.length) {
-      total = (soltos ? soltos.total ?? soltos.itens.length : 0) + resumoGrupos.reduce((s, g) => s + g.total, 0);
-    }
-    return { itens: [...porNumero.values()], total, grupos: resumoGrupos };
+    const comTotalGrupos = Number.isFinite(totalGrupos);
+    const totaisNaoInformados = [];
+    if (totalSoltos === undefined) totaisNaoInformados.push(ITENS_FORA);
+    if (!comTotalGrupos) totaisNaoInformados.push(GRUPOS);
+    return {
+      itens: [...porNumero.values()],
+      total: totalSoltos === undefined ? undefined : totalSoltos + resumoGrupos.reduce((s, g) => s + g.total, 0),
+      grupos: resumoGrupos,
+      totaisNaoInformados,
+      gruposNaoListados: comTotalGrupos && totalGrupos > recebidos.length ? { recebidos: recebidos.length, total: totalGrupos } : null,
+    };
   }
 
   // ---------- análise ----------
@@ -318,8 +335,9 @@
    * Devolve, por linha: estado ('vazia' | 'invalida' | 'repetida' | 'ausente' | 'ok' | 'falha' | 'neutra'),
    * as células com problema (ou não conferidas) e o texto dos problemas; e, por coluna, se é conferida.
    * A conferência é "completa" só se todas as colunas forem conferidas em todos os itens exibidos, se o site
-   * exibir todos os itens da planilha, se o total informado pelo site (inclusive o dos grupos) estiver exibido
-   * e se nenhuma linha da planilha tiver sido ignorada (número de item inválido ou repetido).
+   * exibir todos os itens da planilha, se o site tiver informado o total de itens e o de grupos, se esse total
+   * (inclusive o dos grupos) estiver exibido, se todos os grupos tiverem sido listados e se nenhuma linha da
+   * planilha tiver sido ignorada (número de item inválido ou repetido).
    */
   function analisar(grade, site, padroesBrutos, desativadas) {
     const itens = site && site.itens;
@@ -406,18 +424,26 @@
     // Em geral um grupo incompleto implica total > exibidos, mas não quando o total está subestimado
     // (ex.: chegou a lista de um grupo que não está na lista de grupos); por isso entra na conta por si só.
     const gruposIncompletos = grupos.filter((g) => g.exibidos < g.total);
+    // Sem o total, "exibidos = total" não pode ser verificado: o site real só o informa no cabeçalho da resposta.
+    // Site que não veio de juntarSite (sem o campo) também não prova nada.
+    const totaisNaoInformados = site && Array.isArray(site.totaisNaoInformados) ? site.totaisNaoInformados : [ITENS_FORA, GRUPOS];
+    const gruposNaoListados = (site && site.gruposNaoListados) || null; // a lista de grupos também é paginada
     const completa =
       !colunasNaoConferidas.length && !incompletos.length && !naoExibidos.length && !total &&
-      !gruposIncompletos.length && !linhasIgnoradas.length;
+      !totaisNaoInformados.length && !gruposNaoListados && !gruposIncompletos.length && !linhasIgnoradas.length;
     return {
       linhas, padroes, padraoInvalido, padroesInvalidos, conferida, desativada, itens: ordenados, temConferencia,
       conferem, divergem, incompletos, colunasNaoConferidas, colunasDesativadas, naoExibidos, linhasIgnoradas,
-      total, completa, temGrupos: grupos.length > 0, gruposIncompletos,
+      total, totaisNaoInformados, gruposNaoListados, completa, temGrupos: grupos.length > 0 || !!gruposNaoListados,
+      gruposIncompletos,
     };
   }
 
   /** "GRUPO 1 (0 de 7), GRUPO 2 (3 de 6)" */
   const textoGrupos = (gs) => gs.map((g) => `${g.nome} (${g.exibidos} de ${g.total})`).join(', ');
+
+  /** "itens fora de grupo e de grupos" (para "o site não informou o total de …") */
+  const textoTotais = (ts) => ts.join(' e de ');
 
   /** 'linha 3 (número do item inválido: "3A"), linha 7 (item 2 repetido)' */
   const textoIgnoradas = (ls) => ls.map((l) => `linha ${l.linha} (${l.motivo})`).join(', ');
@@ -436,7 +462,9 @@
     if (a.colunasDesativadas.length) out.push(`Colunas desativadas (não verificadas): ${a.colunasDesativadas.join(', ')}`);
     if (!a.completa) {
       out.push('ATENÇÃO: CONFERÊNCIA INCOMPLETA');
+      if (a.totaisNaoInformados.length) out.push(`   - O site não informou o total de ${textoTotais(a.totaisNaoInformados)} (não dá para saber se todos os itens estão exibidos)`);
       if (a.total) out.push(`   - O site exibiu só ${a.itens.length} de ${a.total} itens`);
+      if (a.gruposNaoListados) out.push(`   - O site listou só ${a.gruposNaoListados.recebidos} de ${a.gruposNaoListados.total} grupos`);
       if (a.gruposIncompletos.length) out.push(`   - Grupos não exibidos por completo: ${textoGrupos(a.gruposIncompletos)}`);
       if (a.naoExibidos.length) out.push(`   - Itens da planilha não exibidos pelo site (não conferidos): ${faixas(a.naoExibidos)}`);
       if (a.linhasIgnoradas.length) out.push(`   - Linhas da planilha ignoradas (não conferidas): ${textoIgnoradas(a.linhasIgnoradas)}`);
@@ -460,7 +488,7 @@
     return partes.join(', ');
   }
 
-  const api = { COLUNAS, linhaVazia, numeroBR, lerTSV, colar, completarItens, juntarSite, analisar, relatorio, faixas, textoGrupos, textoIgnoradas };
+  const api = { COLUNAS, linhaVazia, numeroBR, lerTSV, colar, completarItens, juntarSite, analisar, relatorio, faixas, textoGrupos, textoIgnoradas, textoTotais };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.VerificadorItens = api;
 })(globalThis);

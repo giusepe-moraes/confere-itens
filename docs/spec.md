@@ -1,6 +1,6 @@
 # Especificação — Verificador de Itens (Compras.gov)
 
-Versão descrita: **0.1** · Reconstruída a partir do código em 16/11/2026, com apoio de IA (engenharia reversa; não havia documento de planejamento).
+Versão descrita: **0.2** · Reconstruída a partir do código em 16/11/2026, com apoio de IA (engenharia reversa; não havia documento de planejamento). Revista em 19/11/2026 com respostas reais da API (`testes/dados-reais/`): Q1 resolvida.
 
 Este documento diz **o que** a extensão deve fazer. O **como** está em [arquitetura.md](arquitetura.md), os **porquês** em [decisoes.md](decisoes.md) e o processo de mudança em [manutencao.md](manutencao.md). O manual do usuário é o [LEIAME.md](../verificador-itens-compras/LEIAME.md).
 
@@ -41,7 +41,7 @@ Todo requisito abaixo se subordina a P0. Na dúvida entre "verde" e "incompleta"
 
 | | Origem | Conteúdo |
 |---|---|---|
-| Entrada | Site | Respostas JSON das listas que o próprio site pede: itens fora de grupo, grupos, itens de cada grupo expandido (contrato em [arquitetura.md](arquitetura.md#3-contrato-com-o-site)) |
+| Entrada | Site | Respostas JSON das listas que o próprio site pede: itens fora de grupo, grupos, itens de cada grupo expandido, com o total de registros de cada lista (contrato em [arquitetura.md](arquitetura.md#3-contrato-com-o-site)) |
 | Entrada | Usuário | Planilha colada (Ctrl+V); padrões da linha "Todos"; caixas que ativam/desativam colunas |
 | Saída | Painel | Grade colorida, contadores, aviso de conferência incompleta, pílula quando minimizado |
 | Saída | Área de transferência | Relatório em texto (RF-9) |
@@ -73,11 +73,12 @@ Cada requisito traz os critérios de aceite e os testes que o cobrem (**V** = `t
 1. A extensão só **observa** respostas de requisições que o site faz; nunca faz as suas.
 2. Só requisições **GET** com status **2xx** das três listas são lidas, tanto via `XMLHttpRequest` quanto via `fetch`.
 3. Nenhum erro da extensão pode afetar o site: resposta inesperada é ignorada em silêncio.
-4. Listas de **itens** valem pela **última resposta** de cada lista; a lista de **grupos** **acumula** entre respostas (é paginada).
+4. Listas de **itens** valem pela **última resposta** de cada lista; a lista de **grupos** **acumula** entre respostas (é paginada), e o total de grupos vale pela última resposta.
 5. Os dados são guardados por id de contratação: resposta atrasada de outra contratação não altera a atual.
 6. Um XHR reaproveitado não pode ter a resposta atribuída à URL de um `open()` anterior.
+7. **Total da lista**: se o corpo é um objeto com o total (`totalElements` etc.), vale ele; se o corpo é um array (como no site real, com status 206), vale o cabeçalho `register-count` (inteiro ≥ 0). Nenhum outro cabeçalho é lido. Sem nenhum dos dois, o total fica desconhecido (RF-8.4).
 
-Testes: P "abre o painel e preenche ITEM… (XHR)"; P "troca de contratação (SPA)… fetch também é observado"; P "resposta atrasada de outra contratação…"; P "só GET é lido como lista; XHR reaproveitado…".
+Testes: P "abre o painel e preenche ITEM… (XHR)"; P "troca de contratação (SPA)… fetch também é observado"; P "resposta atrasada de outra contratação…"; P "só GET é lido como lista; XHR reaproveitado…"; P "Q1: total só no cabeçalho register-count…"; P "dados reais…" (3 testes, só com `testes/dados-reais/`).
 
 ### RF-2. Painel e ciclo de vida
 
@@ -178,17 +179,19 @@ A conferência é **completa** somente se **todas** as condições valem:
 1. Toda coluna ativa é conferida (tem célula preenchida ou padrão válido).
 2. Todo item exibido pelo site tem linha na planilha e nenhuma célula não conferida em coluna conferida.
 3. Todo item da planilha é exibido pelo site.
-4. O total informado pelo site não é maior que o número de itens exibidos. Com grupos, total = itens fora de grupo + soma de `quantidadeItens` dos grupos.
-5. Todo grupo conhecido está exibido por completo — condição independente da 4, pois o total pode estar subestimado.
-6. Nenhuma linha da planilha foi ignorada (inválida ou repetida).
+4. O site informou o total da lista de itens fora de grupo **e** o da lista de grupos (RF-1.7). Sem um deles não há como saber se tudo está exibido: "o site não informou o total de …". Também vale antes de a lista chegar.
+5. O total informado pelo site não é maior que o número de itens exibidos. Com grupos, total = itens fora de grupo + soma de `quantidadeItens` dos grupos.
+6. Todos os grupos da contratação foram listados: grupos recebidos ≥ total de grupos informado (a lista de grupos é paginada; sem isso o total da condição 5 fica subestimado).
+7. Todo grupo conhecido está exibido por completo — condição independente da 5, pois o total pode estar subestimado.
+8. Nenhuma linha da planilha foi ignorada (inválida ou repetida).
 
-Incompleta: o contador verde vira "N sem divergência no que foi conferido", aparece o aviso amarelo listando cada motivo e a orientação ao usuário (aumentar "Quantidade máxima de registros listados"; expandir os grupos).
+Incompleta: o contador verde vira "N sem divergência no que foi conferido", aparece o aviso amarelo listando cada motivo e a orientação ao usuário (aumentar "Quantidade máxima de registros listados"; exibir e expandir todos os grupos; recarregar a página se o total não foi informado).
 
-Testes: V "tudo preenchido e igual: conferência completa"; V "incompleta: …" (4 testes); V "grupos: …" (3 testes); V "juntarSite…"; V "linha com número de item inválido ou repetido…"; P "contratação com grupos…" (2 testes); P "linha ignorada e padrão não reconhecido…".
+Testes: V "tudo preenchido e igual: conferência completa"; V "incompleta: …" (5 testes); V "grupos: …" (4 testes); V "juntarSite…"; V "linha com número de item inválido ou repetido…"; V "dados reais…" (só com `testes/dados-reais/`); P "contratação com grupos…" (3 testes); P "Q1: …" (2 testes); P "linha ignorada e padrão não reconhecido…"; P "dados reais…".
 
 ### RF-9. Relatório
 
-Texto simples, nesta ordem: título com o id; "Itens exibidos pelo site: N [de T]"; para cada item divergente, número, nome, CATMAT e os problemas; linha separadora; "Conferem: N | Divergem: M" (ou "Sem divergência no que foi conferido: N…" se incompleta); colunas desativadas; se incompleta, "ATENÇÃO: CONFERÊNCIA INCOMPLETA" com todos os motivos.
+Texto simples, nesta ordem: título com o id; "Itens exibidos pelo site: N [de T]"; para cada item divergente, número, nome, CATMAT e os problemas; linha separadora; "Conferem: N | Divergem: M" (ou "Sem divergência no que foi conferido: N…" se incompleta); colunas desativadas; se incompleta, "ATENÇÃO: CONFERÊNCIA INCOMPLETA" com todos os motivos de RF-8.
 
 O botão de copiar fica desabilitado enquanto nada foi conferido e avisa quando a cópia falha.
 
@@ -215,13 +218,17 @@ Testes: P "dica no hover e Próximo erro"; P "linha ignorada e padrão não reco
 ## 8. Limitações conhecidas
 
 - **Paginação do site**: como a lista de itens vale pela última resposta, mudar de página no site troca o conjunto exibido; as linhas já criadas ficam como "ausentes". O caminho suportado é aumentar "Quantidade máxima de registros listados". O mesmo vale dentro de cada grupo.
-- **Total desconhecido**: quando a resposta é um array puro (sem `totalElements` etc.), a extensão não sabe quantos itens existem fora de grupo. Ver a questão em aberto Q1.
+- **Total no cabeçalho**: o site real só informa o total no cabeçalho `register-count` (Q1). Se o site deixar de mandá-lo, toda conferência fica incompleta ("o site não informou o total") até a extensão ser atualizada — erra para o lado seguro.
+- **Lista de grupos paginada**: como a de itens, mostra 10 grupos por página. Os grupos acumulam, então passar pelas páginas da lista de grupos resolve; enquanto faltar grupo, a conferência fica incompleta (RF-8.6).
 - **API interna**: endpoints e nomes de campos não são contrato público; mudança do site pode fazer o painel ficar em "Aguardando…" ou acusar divergência em tudo.
 - **Ponto sem vírgula**: `12.5` é lido como 12,5 e `1.500` como 1500 (RF-4.1). É o que o Excel pt-BR exibe, mas uma planilha em formato americano pode enganar.
 ## 9. Questões em aberto
 
 Pontos que o código não permite decidir e precisam de confirmação de quem conhece o site real:
 
-- **Q1 — A lista de itens fora de grupo do site real informa o total?** Os testes simulam `{ content, totalElements }`, mas as respostas de grupo reais vêm como array com status 206, sem total no corpo (o interceptor, por decisão, não lê cabeçalhos). Se a lista de itens real também vier como array, a condição RF-8.4 nunca dispara fora de grupos: uma planilha com 10 itens num site que exibe 10 de 20 sairia verde. Verificar no DevTools; se confirmado, é um caso de falso "confere" a tratar.
 - **Q2 — Remoção de grupo/itens no site sem sair da página**: grupos acumulam e só são descartados ao sair do resumo. Se o site permitir excluir um grupo ali mesmo, ele continuaria contando como "não exibido por completo" (erra para o lado seguro).
 - **Q3 — Opções de benefício**: a lista de quatro opções cobre todos os tipos que o site oferece hoje? Outros tipos só conferem pelo nome exato.
+
+### Questões resolvidas
+
+- **Q1 — A lista de itens fora de grupo do site real informa o total?** *Resolvida em 19/11/2026 (v0.2), com as respostas reais de `testes/dados-reais/`.* Não no corpo: todas as listas (itens, grupos, itens de grupo) vêm como **array com status 206**, e o total vem só nos cabeçalhos de paginação (`register-count`, `pages-count`, `page`, `page-size`). Na contratação 634177 o site exibia 10 de 148 itens, e a v0.1, que não lia cabeçalhos, daria verde a uma planilha com aqueles 10. Correção: o interceptor lê o `register-count` (RF-1.7, D-15); total não informado deixa a conferência incompleta (RF-8.4); e, como a lista de grupos também é paginada, faltar grupo na lista também deixa (RF-8.6).
