@@ -202,7 +202,7 @@
     const cab = el('div', 'cab');
     const texto = el('div', 'cab-texto');
     sub = el('div', 'sub');
-    texto.append(el('div', 'titulo', 'Verificador de itens'), sub);
+    texto.append(el('div', 'titulo', 'Confere Itens'), sub);
     btnCopiar = el('button', '', undefined, 'Copiar relatório');
     btnCopiar.append(icone('copiar'));
     btnCopiar.onclick = copiarRelatorio;
