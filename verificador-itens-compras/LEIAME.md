@@ -1,4 +1,6 @@
-# Verificador de Itens – Compras.gov (v0.2)
+# Confere Itens – conferência de itens para o Compras.gov (v0.2)
+
+Ferramenta **não oficial**, sem vínculo com o Compras.gov ou o Serpro.
 
 Confere os itens de uma contratação com a sua planilha, direto na página de resumo do Compras.gov:
 
@@ -6,6 +8,7 @@ Confere os itens de uma contratação com a sua planilha, direto na página de r
 
 ## Novidades da v0.2
 
+- A extensão passa a se chamar **Confere Itens** e ganha ícone (antes: "Verificador de Itens - Compras.gov").
 - **Corrige um falso "confere"**: o site informa o total de itens só no cabeçalho da resposta, que a v0.1 não lia. Com 10 itens exibidos de 148, uma planilha com aqueles 10 saía verde; agora aparece "O site está exibindo só 10 de 148 itens" e a conferência fica incompleta.
 - Se o site não informar o total de itens ou de grupos, a conferência fica **incompleta** ("O site não informou o total…"): recarregue a página.
 - A lista de grupos também é paginada: enquanto o site não tiver listado todos os grupos, o painel avisa "O site listou só N de M grupos". Passe pelas páginas da lista de grupos (eles se somam) e expanda cada um.

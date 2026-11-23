@@ -1,4 +1,4 @@
-# Especificação — Verificador de Itens (Compras.gov)
+# Especificação — Confere Itens (Compras.gov)
 
 Versão descrita: **0.2** · Reconstruída a partir do código em 16/11/2026, com apoio de IA (engenharia reversa; não havia documento de planejamento). Revista em 19/11/2026 com respostas reais da API (`testes/dados-reais/`): Q1 resolvida.
 

@@ -67,6 +67,10 @@ Consequência: sempre registrada no painel e no relatório; reativada ao limpar 
 Porquê: as respostas reais (`testes/dados-reais/`) mostraram que o site manda todas as listas como array com status 206 e o total só nos cabeçalhos de paginação (Q1). Sem lê-lo, uma planilha com os 10 itens exibidos de uma contratação de 148 saía verde. Ler um cabeçalho da resposta que o site já recebeu não faz requisição nem altera nada; o resto de D-04 continua.
 Consequência: só `register-count` é lido, só quando o corpo é array, dentro do `try/catch`. Pelo P0, total não informado (cabeçalho sumiu, lista não chegou) deixa a conferência incompleta em vez de supor que tudo foi exibido — se o site mudar o cabeçalho, o sintoma é amarelo sempre, nunca verde falso. Pelo mesmo motivo a lista de grupos, também paginada, tem total: faltar grupo nela deixa incompleta.
 
+**D-16 — Nome "Confere Itens", marcado como não oficial.** (2026-11-23, v0.2)
+Porquê: para publicar na Chrome Web Store, cuja política proíbe nomes e ícones que sugiram origem oficial. "Confere" é o verbo que o painel já usa. O ícone mostra duas linhas conferidas e uma incompleta (D-01) e não usa as cores do gov.br.
+Consequência: o nome no manifesto termina em "(não oficial)" e o LEIAME diz que não há vínculo com o Compras.gov ou o Serpro. Os PNG de `icones/` saem de `icone.svg` (renderizados no Chromium); ao mudar o desenho, gere os quatro tamanhos de novo.
+
 ---
 
 <!-- Modelo para novas decisões:

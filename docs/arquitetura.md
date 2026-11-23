@@ -1,4 +1,4 @@
-# Arquitetura — Verificador de Itens (Compras.gov)
+# Arquitetura — Confere Itens (Compras.gov)
 
 Descreve **como** a v0.2 atende à [spec.md](spec.md). Reconstruída a partir do código em 16/11/2026, com apoio de IA; contrato com o site revisto em 19/11/2026 com respostas reais (`testes/dados-reais/`).
 
@@ -25,7 +25,7 @@ Descreve **como** a v0.2 atende à [spec.md](spec.md). Reconstruída a partir do
 | `interceptor.js` | MAIN, `document_start` | Observar as três listas e repassá-las com o total | Fazer requisição, ler cabeçalho além de `register-count`, lançar erro, conter regra de conferência |
 | `verificacao.js` | isolado (e Node) | Colunas, leitura de números e do TSV, `juntarSite`, `analisar`, `relatorio` | Tocar em DOM, `window` ou estado global |
 | `painel.js` | isolado | UI, estado, ciclo de vida da SPA | Conter regra de conferência (só apresenta o que `analisar` devolve) |
-| `manifest.json` | — | Dois `content_scripts` no mesmo `matches`; nenhuma permissão | — |
+| `manifest.json` | — | Dois `content_scripts` no mesmo `matches`; nenhuma permissão; ícones em `icones/` (PNG gerados de `icone.svg`) | — |
 
 O interceptor precisa do mundo MAIN porque só ali o monkey-patch alcança o `XMLHttpRequest`/`fetch` que o site usa; por isso o Chrome mínimo é o 111 (`world: "MAIN"` no manifesto). O `matches` cobre todo `/comprasnet-artefatos-web/*` porque o site é SPA: o usuário pode chegar ao resumo por navegação interna, sem recarregar.
 
