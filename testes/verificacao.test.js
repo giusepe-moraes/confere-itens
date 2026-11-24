@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const V = require(path.join(process.env.EXT || path.join(__dirname, '..', 'verificador-itens-compras'), 'verificacao.js'));
+const V = require(path.join(process.env.EXT || path.join(__dirname, '..', 'confere-itens'), 'verificacao.js'));
 const reais = require('./apoio-dados-reais.js');
 
 const IDX = Object.fromEntries(V.COLUNAS.map((c, i) => [c.id, i]));

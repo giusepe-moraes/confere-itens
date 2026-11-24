@@ -10,7 +10,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const reais = require('./apoio-dados-reais.js');
 
-const EXT = process.env.EXT || path.join(__dirname, '..', 'verificador-itens-compras');
+const EXT = process.env.EXT || path.join(__dirname, '..', 'confere-itens');
 const CAPTURAS = path.join(__dirname, 'capturas');
 const ORIGEM = 'https://cnetmobile.estaleiro.serpro.gov.br';
 const pagina = (id) => `${ORIGEM}/comprasnet-artefatos-web/execucao/resume?id=${id}`;

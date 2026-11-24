@@ -37,7 +37,7 @@ PRIVACIDADE
 
 | Campo | Arquivo | Tamanho |
 |---|---|---|
-| Ícone da loja | `verificador-itens-compras/icones/icone-128.png` | 128×128 |
+| Ícone da loja | `confere-itens/icones/icone-128.png` | 128×128 |
 | Bloco promocional pequeno | `docs/loja/bloco-promocional-440x280.png` | 440×280 |
 | Capturas de tela (nesta ordem) | divergência, tudo confere, página inteira | 1280×800 |
 

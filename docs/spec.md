@@ -2,7 +2,7 @@
 
 Versão descrita: **0.2** · Reconstruída a partir do código em 16/11/2026, com apoio de IA (engenharia reversa; não havia documento de planejamento). Revista em 19/11/2026 com respostas reais da API (`testes/dados-reais/`): Q1 resolvida.
 
-Este documento diz **o que** a extensão deve fazer. O **como** está em [arquitetura.md](arquitetura.md), os **porquês** em [decisoes.md](decisoes.md) e o processo de mudança em [manutencao.md](manutencao.md). O manual do usuário é o [LEIAME.md](../verificador-itens-compras/LEIAME.md).
+Este documento diz **o que** a extensão deve fazer. O **como** está em [arquitetura.md](arquitetura.md), os **porquês** em [decisoes.md](decisoes.md) e o processo de mudança em [manutencao.md](manutencao.md). O manual do usuário é o [LEIAME.md](../confere-itens/LEIAME.md).
 
 Regra de uso: toda mudança de comportamento altera primeiro este arquivo (requisito e critério de aceite), depois os testes, depois o código.
 

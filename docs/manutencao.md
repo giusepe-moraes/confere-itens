@@ -11,7 +11,7 @@ Como mudar o projeto sem quebrar o que ele garante. Complementa [spec.md](spec.m
 | `docs/decisoes.md` | Por que é assim | Tomar ou reverter uma decisão de projeto |
 | `docs/manutencao.md` | Como mudar e publicar | Mudar o processo |
 | `docs/loja.md`, `PRIVACIDADE.md` | Textos da ficha na Chrome Web Store e política de privacidade | Mudar o que a extensão lê, mostra ou o `manifest.json` |
-| `verificador-itens-compras/LEIAME.md` | Manual do usuário e novidades da versão | Junto com a `version` do manifesto |
+| `confere-itens/LEIAME.md` | Manual do usuário e novidades da versão | Junto com a `version` do manifesto |
 | `CLAUDE.md` | Contexto enxuto para o agente | Só quando a falta da linha faria o agente errar |
 
 ## 2. Ambiente
@@ -93,7 +93,7 @@ Regex e nome da `lista` no interceptor; validação da mensagem em `painel.js` (
 - [ ] Seção "Novidades da vX" acrescentada ao LEIAME, acima das anteriores (a v0.1 é a versão inicial e não tem).
 - [ ] Commit da versão e tag `vX.Y` no git.
 - [ ] Teste manual no Chrome com a extensão carregada da pasta (é o único teste do `manifest.json`): abrir uma contratação sem grupos e uma com grupos; colar uma planilha; trocar de contratação pelo site; sair do resumo e voltar; conferir o console sem erros da extensão.
-- [ ] Compactar só a pasta `verificador-itens-compras/` (sem `testes/`, `docs/`, capturas).
+- [ ] Compactar só a pasta `confere-itens/` (sem `testes/`, `docs/`, capturas).
 - [ ] Ficha da loja e política conferem com a versão (`docs/loja.md`, `PRIVACIDADE.md`); enviar o zip no painel de desenvolvedor.
 
 Numeração: começa em 0.1; `0.x` para comportamento novo, `0.x.y` para correção. O Chrome aceita de um a quatro números inteiros separados por ponto.

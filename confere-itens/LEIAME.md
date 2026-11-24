@@ -17,7 +17,7 @@ Confere os itens de uma contratação com a sua planilha, direto na página de r
 
 1. Descompacte o .zip numa pasta permanente.
 2. Abra `chrome://extensions` e ative o **Modo do desenvolvedor**.
-3. **Carregar sem compactação** → selecione a pasta `verificador-itens-compras`.
+3. **Carregar sem compactação** → selecione a pasta `confere-itens`.
 
 Para atualizar: substitua os arquivos, recarregue a extensão em `chrome://extensions` e atualize a página do Compras.
 
@@ -86,7 +86,7 @@ A planilha fica só na memória da aba; nada é gravado. Ao trocar de contrataç
 
 ## Testes
 
-Na pasta acima de `testes/` (com `verificador-itens-compras/` ao lado):
+Na pasta acima de `testes/` (com `confere-itens/` ao lado):
 
 ```
 node --test testes/verificacao.test.js     # regras de verificação, sem navegador
