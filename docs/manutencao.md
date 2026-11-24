@@ -90,7 +90,7 @@ Regex e nome da `lista` no interceptor; validação da mensagem em `painel.js` (
 
 - [ ] `node --test testes/*.test.js` verde (os dois arquivos).
 - [ ] `version` no `manifest.json` e no título do `LEIAME.md` iguais.
-- [ ] Seção "Novidades da vX" acrescentada ao LEIAME, acima das anteriores (a v0.1 é a versão inicial e não tem).
+- [ ] Seção "Novidades da vX" acrescentada ao LEIAME, acima das anteriores (a v0.2, primeira publicada, é a versão inicial e não tem).
 - [ ] Commit da versão e tag `vX.Y` no git.
 - [ ] Teste manual no Chrome com a extensão carregada da pasta (é o único teste do `manifest.json`): abrir uma contratação sem grupos e uma com grupos; colar uma planilha; trocar de contratação pelo site; sair do resumo e voltar; conferir o console sem erros da extensão.
 - [ ] Compactar só a pasta `confere-itens/` (sem `testes/`, `docs/`, capturas).
