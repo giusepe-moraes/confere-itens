@@ -67,7 +67,7 @@ O interceptor.js roda no mundo MAIN porque só ali consegue observar o XMLHttpRe
 
 **Uso de dados:** não marque nenhuma categoria. A extensão lê conteúdo da página e o texto colado, mas tudo fica na aba e nada é transmitido. Se o revisor entender que ler o conteúdo da página é "coleta", marque **Conteúdo do site** e mantenha a explicação acima. Marque as três certificações (não vende nem transfere dados a terceiros, não usa para fins alheios à finalidade única, não usa para crédito ou empréstimo).
 
-**URL da política de privacidade:** o endereço público de `PRIVACIDADE.md` no GitHub (por exemplo, `https://github.com/giusepe-moraes/verificador-de-itens/blob/main/PRIVACIDADE.md`). Só funciona com o repositório público; se ele for privado, publique a política em outro endereço público.
+**URL da política de privacidade:** o endereço público de `PRIVACIDADE.md` no GitHub (por exemplo, `https://github.com/giusepe-moraes/confere-itens/blob/main/PRIVACIDADE.md`). Só funciona com o repositório público; se ele for privado, publique a política em outro endereço público.
 
 ## Aba "Distribuição"
 

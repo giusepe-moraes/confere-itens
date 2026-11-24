@@ -33,4 +33,4 @@ Mudanças nesta política são publicadas neste arquivo, com a data no topo.
 
 ## Contato
 
-Dúvidas: abra uma *issue* em https://github.com/giusepe-moraes/verificador-de-itens/issues
+Dúvidas: abra uma *issue* em https://github.com/giusepe-moraes/confere-itens/issues
